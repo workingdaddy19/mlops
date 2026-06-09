@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}게시판 - MLFoundry{% endblock %}
+
+{% block breadcrumb %}
+  <span>게시판</span>
+  <span class="sep">›</span>
+  <span class="current">공지사항/자료실</span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div class="card-title" style="margin-bottom: 0;">전체 게시글</div>
+    <button class="btn btn-primary" onclick="toggleWriteForm()">+ 글 작성</button>
+  </div>
+
+  <div id="write-form" style="display:none; margin-bottom: 20px; padding: 16px; background: var(--bg-sidebar); border-radius: 8px;">
+    <div style="margin-bottom: 10px;">
+      <input type="text" id="post-title" placeholder="제목" style="width: 100%;">
+    </div>
+    <div style="margin-bottom: 10px;">
+      <textarea id="post-content" rows="4" placeholder="내용" style="width: 100%;"></textarea>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-primary" onclick="submitPost()">등록</button>
+      <button class="btn btn-secondary" onclick="toggleWriteForm()">취소</button>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width: 60px;">#</th>
+        <th>제목</th>
+        <th style="width: 120px;">작성자</th>
+        <th style="width: 150px;">날짜</th>
+        <th style="width: 80px;">조회</th>
+      </tr>
+    </thead>
+    <tbody id="post-list">
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">게시글을 불러오는 중...</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadPosts);
+
+async function loadPosts() {
+  const listEl = document.getElementById('post-list');
+  try {
+    const res = await apiFetch('/api/board?size=20');
+    if (!res) return;
+    const data = await res.json();
+    const posts = data.items || [];
+
+    if (posts.length === 0) {
+      listEl.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">게시글이 없습니다.</td></tr>';
+      return;
+    }
+
+    listEl.innerHTML = posts.map(post => `
+      <tr>
+        <td>${post.id}</td>
+        <td style="font-weight: 500;">${post.title}</td>
+        <td>${post.author || '익명'}</td>
+        <td style="font-size: 12px; color: var(--text-muted);">${new Date(post.created_at).toLocaleDateString()}</td>
+        <td style="color: var(--text-muted);">${post.view_count || 0}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #ef4444;">데이터를 불러오는 데 실패했습니다.</td></tr>';
+  }
+}
+
+function toggleWriteForm() {
+  const f = document.getElementById('write-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function submitPost() {
+  const title = document.getElementById('post-title').value.trim();
+  const content = document.getElementById('post-content').value.trim();
+  if (!title || !content) { alert('제목과 내용을 입력하세요.'); return; }
+
+  const res = await apiFetch('/api/board', {
+    method: 'POST',
+    body: JSON.stringify({ title, content, board_type: 'notice' }),
+  });
+  if (!res || !res.ok) { alert('등록 실패'); return; }
+
+  document.getElementById('post-title').value = '';
+  document.getElementById('post-content').value = '';
+  toggleWriteForm();
+  loadPosts();
+}
+</script>
+{% endblock %}

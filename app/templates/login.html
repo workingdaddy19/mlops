@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로그인 - AI 데이터 분석</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #f1f5f9;
+    }
+    .login-card {
+      width: 400px;
+      padding: 40px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .btn-login {
+      width: 100%;
+      justify-content: center;
+      margin-top: 10px;
+      height: 42px;
+    }
+    #error-msg {
+      color: #ef4444;
+      font-size: 13px;
+      margin-top: 16px;
+      text-align: center;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="login-header">
+    <div class="nav-brand" style="justify-content: center;">
+      <span class="brand-icon">F</span>
+      <span class="brand-text">AI 데이터 분석</span>
+    </div>
+  </div>
+  
+  <form id="login-form" onsubmit="handleLogin(event)">
+    <div class="form-group">
+      <label class="form-label">아이디</label>
+      <input type="text" name="username" class="form-input" required autofocus>
+    </div>
+    <div class="form-group">
+      <label class="form-label">비밀번호</label>
+      <input type="password" name="password" class="form-input" required>
+    </div>
+    <button type="submit" class="btn btn-primary btn-login">로그인</button>
+  </form>
+  
+  <div id="error-msg"></div>
+  <div style="text-align:center; margin-top:24px; font-size:11px; color:#94a3b8;">
+    v2.0 · 2026-05-27
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+async function handleLogin(e) {
+  e.preventDefault();
+  const errorEl = document.getElementById('error-msg');
+  errorEl.textContent = '';
+  
+  const form = e.target;
+  const formData = new FormData(form);
+  
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!res.ok) {
+      errorEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+      return;
+    }
+    
+    const data = await res.json();
+    Auth.setToken(data.access_token);
+    
+    // 사용자 정보 가져오기
+    const meRes = await apiFetch('/api/auth/me');
+    if (meRes && meRes.ok) {
+      const user = await meRes.json();
+      Auth.setUser(user);
+      window.location.href = '/dashboard';
+    } else {
+      errorEl.textContent = '사용자 정보를 가져오는 데 실패했습니다.';
+    }
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = '서버 통신 중 오류가 발생했습니다.';
+  }
+}
+
+// 이미 로그인된 경우 리다이렉트
+if (Auth.isLoggedIn()) {
+  window.location.href = '/dashboard';
+}
+</script>
+
+</body>
+</html>

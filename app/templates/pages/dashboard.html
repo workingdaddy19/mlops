@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드 - AI 데이터 분석{% endblock %}
+
+{% block breadcrumb %}
+  <span class="current">Dashboard</span>
+{% endblock %}
+
+{% block content %}
+
+<!-- 서비스 현황 카드 -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:24px;">
+
+  <!-- JupyterHub 서버 현황 -->
+  <div class="stat-card" id="card-jupyter">
+    <div class="stat-icon">📓</div>
+    <div class="stat-body">
+      <div class="stat-label">JupyterHub 서버</div>
+      <div class="stat-value" id="val-jupyter">—</div>
+      <div class="stat-sub"  id="sub-jupyter">확인 중...</div>
+    </div>
+    <div class="stat-badge" id="badge-jupyter">⏳</div>
+  </div>
+
+  <!-- MLFlow 상태 -->
+  <div class="stat-card" id="card-mlflow">
+    <div class="stat-icon">📈</div>
+    <div class="stat-body">
+      <div class="stat-label">MLFlow</div>
+      <div class="stat-value" id="val-mlflow">—</div>
+      <div class="stat-sub"  id="sub-mlflow">확인 중...</div>
+    </div>
+    <div class="stat-badge" id="badge-mlflow">⏳</div>
+  </div>
+
+  <!-- 포털 사용자 현황 -->
+  <div class="stat-card" id="card-users">
+    <div class="stat-icon">👥</div>
+    <div class="stat-body">
+      <div class="stat-label">포털 사용자</div>
+      <div class="stat-value" id="val-users">—</div>
+      <div class="stat-sub"  id="sub-users">확인 중...</div>
+    </div>
+    <div class="stat-badge" id="badge-users">⏳</div>
+  </div>
+
+  <!-- API 서버 (항상 정상) -->
+  <div class="stat-card">
+    <div class="stat-icon">⚡</div>
+    <div class="stat-body">
+      <div class="stat-label">API 서버</div>
+      <div class="stat-value" style="color:var(--primary);">정상</div>
+      <div class="stat-sub">FastAPI :6080</div>
+    </div>
+    <div class="stat-badge" style="color:#10b981; font-size:18px;">●</div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.stat-card {
+  background: var(--bg-content);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 20px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  transition: box-shadow 0.15s;
+}
+.stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+.stat-icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.stat-body { flex: 1; min-width: 0; }
+.stat-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+.stat-sub   { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.stat-badge { font-size: 12px; flex-shrink: 0; }
+.badge-ok  { color: #10b981; font-size: 18px; }
+.badge-err { color: #ef4444; font-size: 18px; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', loadDashboard);
+
+async function loadDashboard() {
+  await Promise.allSettled([
+    loadJupyterStats(),
+    loadMlflowStats(),
+    loadUserStats(),
+  ]);
+}
+
+// ── JupyterHub 서버 현황 ─────────────────────────────────────────
+async function loadJupyterStats() {
+  try {
+    const res = await apiFetch('/api/jupyter/stats');
+    if (!res) return;
+    const d = await res.json();
+
+    const ok = d.available;
+    document.getElementById('val-jupyter').textContent   = ok ? `${d.running_servers}개 실행 중` : '연결 안됨';
+    document.getElementById('val-jupyter').style.color  = ok ? 'var(--text-primary)' : '#ef4444';
+    document.getElementById('sub-jupyter').textContent   = ok ? `JupyterHub 사용자 ${d.total_users}명` : 'Admin 토큰 미설정 또는 오류';
+    document.getElementById('badge-jupyter').className   = 'stat-badge ' + (ok ? 'badge-ok' : 'badge-err');
+    document.getElementById('badge-jupyter').textContent = ok ? '●' : '●';
+  } catch {
+    document.getElementById('val-jupyter').textContent   = '오류';
+    document.getElementById('sub-jupyter').textContent   = '데이터 조회 실패';
+    document.getElementById('badge-jupyter').className   = 'stat-badge badge-err';
+    document.getElementById('badge-jupyter').textContent = '●';
+  }
+}
+
+// ── MLFlow 상태 ──────────────────────────────────────────────────
+async function loadMlflowStats() {
+  try {
+    const res = await apiFetch('/api/mlflow/health');
+    if (!res) return;
+    const d = await res.json();
+    const ok = d.status === 'ok';
+    document.getElementById('val-mlflow').textContent   = ok ? '정상' : '응답 없음';
+    document.getElementById('val-mlflow').style.color  = ok ? 'var(--primary)' : '#ef4444';
+    document.getElementById('sub-mlflow').textContent   = d.url || '';
+    document.getElementById('badge-mlflow').className   = 'stat-badge ' + (ok ? 'badge-ok' : 'badge-err');
+    document.getElementById('badge-mlflow').textContent = '●';
+  } catch {
+    document.getElementById('val-mlflow').textContent = '오류';
+    document.getElementById('badge-mlflow').className   = 'stat-badge badge-err';
+    document.getElementById('badge-mlflow').textContent = '●';
+  }
+}
+
+// ── 포털 사용자 수 ───────────────────────────────────────────────
+async function loadUserStats() {
+  try {
+    const res = await apiFetch('/api/admin/users/count');
+    if (!res) return;
+    const d = await res.json();
+    document.getElementById('val-users').textContent   = `${d.count}명`;
+    document.getElementById('sub-users').textContent   = '포털 등록 계정';
+    document.getElementById('badge-users').className   = 'stat-badge badge-ok';
+    document.getElementById('badge-users').textContent = '●';
+  } catch {
+    document.getElementById('val-users').textContent   = '—';
+    document.getElementById('sub-users').textContent   = '조회 실패';
+  }
+}
+</script>
+{% endblock %}

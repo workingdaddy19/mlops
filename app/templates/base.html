@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AI 데이터 분석{% endblock %}</title>
+  <!-- Favicon: AI 텍스트 SVG -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d9488'/%3E%3Ctext x='50%25' y='50%25' font-family='system-ui,sans-serif' font-size='11' font-weight='700' fill='white' text-anchor='middle' dominant-baseline='central'%3EAI%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body data-page="{{ active_page }}">
+
+<!-- ── Left Sidebar ────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+  <!-- Sidebar Header: 로고 & 토글 통합 -->
+  <div class="sidebar-header">
+    <a href="/dashboard" class="sidebar-brand">
+      <span class="brand-icon">AI</span>
+      <span class="brand-text">AI 데이터 분석</span>
+    </a>
+    <button class="sidebar-toggle" id="sidebarToggle" title="메뉴 접기/펼치기">
+      <span class="toggle-icon">&#9776;</span>
+    </button>
+  </div>
+
+  <div class="sidebar-menu-wrapper">
+    <!-- Home -->
+    <a href="/dashboard" class="sidebar-item {% if active_page=='dashboard' %}active{% endif %}">
+      <span class="s-icon">🏠</span><span class="s-label">Home</span>
+    </a>
+
+    <!-- Notice -->
+    <a href="/board" class="sidebar-item {% if active_page=='board' %}active{% endif %}">
+      <span class="s-icon">📢</span><span class="s-label">Notice</span>
+    </a>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- Data -->
+    <div class="sidebar-group open" id="grp-data">
+      <button class="sidebar-group-btn" onclick="toggleGroup('grp-data')">
+        <span class="s-icon">📁</span>
+        <span class="s-label">Data</span>
+        <span class="s-arrow"></span>
+      </button>
+      <div class="sidebar-sub">
+        <a href="/files"       class="sidebar-subitem {% if active_page=='files'                 %}active{% endif %}"><span class="s-icon">🗄️</span><span class="s-label">S3 스토리지</span></a>
+        <a href="/data/query"  class="sidebar-subitem {% if active_page in ('query','datasets') %}active{% endif %}"><span class="s-icon">📊</span><span class="s-label">Athena DB</span></a>
+      </div>
+    </div>
+
+    <!-- Analysis -->
+    <div class="sidebar-group open" id="grp-analysis">
+      <button class="sidebar-group-btn" onclick="toggleGroup('grp-analysis')">
+        <span class="s-icon">🔬</span>
+        <span class="s-label">Analysis</span>
+        <span class="s-arrow"></span>
+      </button>
+      <div class="sidebar-sub">
+        <a href="/aiml/jupyter" class="sidebar-subitem {% if active_page=='jupyter' %}active{% endif %}"><span class="s-icon">📓</span><span class="s-label">Jupyter</span></a>
+      </div>
+    </div>
+
+    <!-- Models -->
+    <div class="sidebar-group open" id="grp-models">
+      <button class="sidebar-group-btn" onclick="toggleGroup('grp-models')">
+        <span class="s-icon">📈</span>
+        <span class="s-label">Models</span>
+        <span class="s-arrow"></span>
+      </button>
+      <div class="sidebar-sub">
+        <a href="/aiml/mlflow"     class="sidebar-subitem {% if active_page=='mlflow'    %}active{% endif %}"><span class="s-icon">🧪</span><span class="s-label">MLFlow</span></a>
+        <a href="/aiml/inference"  class="sidebar-subitem {% if active_page=='inference' %}active{% endif %}"><span class="s-icon">🔮</span><span class="s-label">Inference Test</span></a>
+        <a href="/airflow"         class="sidebar-subitem {% if active_page=='airflow'   %}active{% endif %}"><span class="s-icon">🌀</span><span class="s-label">Airflow</span></a>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- Management (admin only — shown by JS) -->
+    <div class="sidebar-group open" id="grp-mgmt" style="display:none;">
+      <button class="sidebar-group-btn" onclick="toggleGroup('grp-mgmt')">
+        <span class="s-icon">⚙️</span>
+        <span class="s-label">Management</span>
+        <span class="s-arrow"></span>
+      </button>
+      <div class="sidebar-sub">
+        <a href="/admin/users"    class="sidebar-subitem {% if active_page=='admin-users'    %}active{% endif %}"><span class="s-icon">👥</span><span class="s-label">Users</span></a>
+        <a href="/admin/settings" class="sidebar-subitem {% if active_page=='admin-settings' %}active{% endif %}"><span class="s-icon">🔧</span><span class="s-label">Settings</span></a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar Footer: 사용자 프로필 & 로그아웃 -->
+  <div class="sidebar-footer">
+    <div class="sidebar-user-info">
+      <span class="user-avatar">👤</span>
+      <span id="nav-username" class="user-name"></span>
+    </div>
+    <button class="btn-sidebar-logout" onclick="logout()" title="로그아웃">
+      <span class="logout-icon">🚪</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ── Main Content ────────────────────────── -->
+<main class="main-content" id="mainContent">
+  <div class="breadcrumb">
+    {% block breadcrumb %}{% endblock %}
+  </div>
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+<script src="/static/js/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

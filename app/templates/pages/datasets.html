@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}데이터셋 - MLFoundry{% endblock %}
+
+{% block breadcrumb %}
+  <span>Data</span>
+  <span class="sep">›</span>
+  <span class="current">데이터셋</span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div class="card-title" style="margin-bottom: 0;">데이터셋 목록</div>
+    <button class="btn btn-primary" onclick="toggleRegisterForm()">+ 데이터셋 등록</button>
+  </div>
+
+  <div id="register-form" style="display:none; margin-bottom: 20px; padding: 16px; background: var(--bg-sidebar); border-radius: 8px;">
+    <div style="margin-bottom: 10px;">
+      <input type="text" id="ds-name" placeholder="데이터셋 이름" style="width: 100%;">
+    </div>
+    <div style="margin-bottom: 10px;">
+      <input type="text" id="ds-source" placeholder="테이블명 또는 파일명" style="width: 100%;">
+    </div>
+    <div style="margin-bottom: 10px;">
+      <textarea id="ds-desc" rows="3" placeholder="설명 (선택)" style="width: 100%;"></textarea>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-primary" onclick="registerDataset()">등록</button>
+      <button class="btn btn-secondary" onclick="toggleRegisterForm()">취소</button>
+    </div>
+  </div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>이름</th>
+        <th>소스</th>
+        <th>설명</th>
+        <th>소유자</th>
+        <th>등록일</th>
+      </tr>
+    </thead>
+    <tbody id="dataset-list">
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">데이터셋을 불러오는 중...</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadDatasets);
+
+async function loadDatasets() {
+  const listEl = document.getElementById('dataset-list');
+  try {
+    const res = await apiFetch('/api/datasets');
+    if (!res) return;
+    const data = await res.json();
+    const datasets = data.items || [];
+
+    if (datasets.length === 0) {
+      listEl.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">등록된 데이터셋이 없습니다.</td></tr>';
+      return;
+    }
+
+    listEl.innerHTML = datasets.map(ds => `
+      <tr>
+        <td style="font-weight: 500;">${ds.name}</td>
+        <td style="color: var(--text-secondary);">${ds.source_name || '-'}</td>
+        <td style="color: var(--text-secondary);">${ds.description || '-'}</td>
+        <td>${ds.owner || '-'}</td>
+        <td style="font-size: 12px; color: var(--text-muted);">${new Date(ds.created_at).toLocaleDateString()}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #ef4444;">데이터를 불러오는 데 실패했습니다.</td></tr>';
+  }
+}
+
+function toggleRegisterForm() {
+  const f = document.getElementById('register-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function registerDataset() {
+  const name = document.getElementById('ds-name').value.trim();
+  const source_name = document.getElementById('ds-source').value.trim();
+  const description = document.getElementById('ds-desc').value.trim();
+  if (!name || !source_name) { alert('이름과 소스를 입력하세요.'); return; }
+
+  const res = await apiFetch('/api/datasets', {
+    method: 'POST',
+    body: JSON.stringify({ name, source_name, description: description || null }),
+  });
+  if (!res || !res.ok) { alert('등록 실패'); return; }
+
+  toggleRegisterForm();
+  loadDatasets();
+}
+</script>
+{% endblock %}

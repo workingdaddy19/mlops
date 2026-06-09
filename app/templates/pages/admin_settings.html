@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}시스템 설정 - AI 데이터 분석{% endblock %}
+
+{% block breadcrumb %}
+  <span>Management</span>
+  <span class="sep">›</span>
+  <span class="current">Settings</span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <div class="card-title" style="margin-bottom:0;">🔧 시스템 설정</div>
+    <span style="font-size:12px;color:var(--text-muted);">저장 즉시 반영 · 재배포 불필요</span>
+  </div>
+
+  <!-- 그룹 탭 -->
+  <div id="group-tabs" style="display:flex; gap:6px; margin-bottom:20px; border-bottom:1px solid var(--border); padding-bottom:0;">
+    <!-- 동적 생성 -->
+  </div>
+
+  <!-- 설정 목록 -->
+  <div id="settings-body">
+    <div style="text-align:center; color:var(--text-muted); padding:24px;">로딩 중...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.group-tab {
+  padding: 8px 16px;
+  border: none; background: transparent;
+  font-size: 13px; font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+.group-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+.group-tab:hover:not(.active) { color: var(--text-primary); }
+
+.setting-row {
+  display: grid;
+  grid-template-columns: 200px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.setting-key   { font-size: 11px; color: var(--text-muted); margin-top:2px; font-family: monospace; }
+.setting-input {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font-size: 13px; color: var(--text-primary); background: #fff;
+  outline: none; transition: border-color 0.15s;
+  font-family: monospace;
+}
+.setting-input:focus { border-color: var(--primary); }
+.btn-toggle-vis {
+  position: absolute; right: 10px; background: transparent;
+  border: none; cursor: pointer; font-size: 13px;
+  color: var(--text-muted); padding: 4px; line-height: 1;
+}
+.btn-toggle-vis:hover { color: var(--text-primary); }
+.btn-save {
+  padding: 7px 14px; font-size: 12px;
+  background: var(--primary); color: #fff;
+  border: none; border-radius: 6px; cursor: pointer;
+  transition: background 0.15s; white-space: nowrap;
+}
+.btn-save:hover { background: var(--primary-hover); }
+</style>
+
+<script>
+const GROUP_LABELS = {
+  jupyter: '🧬 Jupyter',
+  mlflow:  '📈 MLFlow',
+  athena:  '📊 Athena',
+  s3:      '🗄️ S3',
+  general: '⚙️ 기타',
+};
+
+let allSettings = [];
+let currentGroup = '';
+
+document.addEventListener('DOMContentLoaded', loadSettings);
+
+async function loadSettings() {
+  const res = await apiFetch('/api/admin/settings');
+  if (!res) return;
+
+  if (res.status === 403) {
+    document.getElementById('settings-body').innerHTML =
+      '<div style="text-align:center;color:#ef4444;padding:24px;">⛔ 관리자 권한이 필요합니다.</div>';
+    return;
+  }
+
+  allSettings = await res.json();
+
+  // 그룹 목록 추출 (순서 고정)
+  const groups = [...new Set(allSettings.map(s => s.group))];
+  renderTabs(groups);
+  selectGroup(groups[0] || 'general');
+}
+
+function renderTabs(groups) {
+  const tabsEl = document.getElementById('group-tabs');
+  tabsEl.innerHTML = groups.map(g => `
+    <button class="group-tab" id="tab-${g}" onclick="selectGroup('${g}')">
+      ${GROUP_LABELS[g] || g}
+    </button>
+  `).join('');
+}
+
+function selectGroup(group) {
+  currentGroup = group;
+  // 탭 활성화
+  document.querySelectorAll('.group-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.id === 'tab-' + group);
+  });
+  renderSettings(group);
+}
+
+function renderSettings(group) {
+  const rows = allSettings.filter(s => s.group === group);
+  const body = document.getElementById('settings-body');
+
+  if (rows.length === 0) {
+    body.innerHTML = '<div style="color:var(--text-muted);padding:16px;">설정 항목이 없습니다.</div>';
+    return;
+  }
+
+  body.innerHTML = rows.map(s => {
+    const isSensitive = s.key.toLowerCase().includes('token') || s.key.toLowerCase().includes('password') || s.key.toLowerCase().includes('secret');
+    const inputType = isSensitive ? 'password' : 'text';
+    const toggleButton = isSensitive ? `<button class="btn-toggle-vis" onclick="toggleVisibility('val-${escapeAttrId(s.key)}')">👁️</button>` : '';
+
+    return `
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">${escapeHtml(s.label || s.key)}</div>
+          <div class="setting-key">${escapeHtml(s.key)}</div>
+        </div>
+        <div style="position:relative; width: 100%; display: flex; align-items: center;">
+          <input class="setting-input" id="val-${escapeAttrId(s.key)}"
+                 type="${inputType}"
+                 value="${escapeHtml(s.value)}" data-key="${escapeAttr(s.key)}"
+                 style="padding-right: 36px;">
+          ${toggleButton}
+        </div>
+        <button class="btn-save" onclick="saveSetting('${escapeAttr(s.key)}')">저장</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleVisibility(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+async function saveSetting(key) {
+  const inputId = 'val-' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const value = input.value;
+
+  const res = await apiFetch(`/api/admin/settings/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  });
+  if (!res) return;
+
+  if (res.ok) {
+    // allSettings 캐시 업데이트
+    const idx = allSettings.findIndex(s => s.key === key);
+    if (idx >= 0) allSettings[idx].value = value;
+    showToast(`'${key}' 설정이 저장되었습니다.`, 'success');
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.detail || '저장 실패', 'error');
+  }
+}
+
+// ── 유틸 ────────────────────────────────────────────────────────
+function escapeAttrId(str) {
+  return String(str).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+function showToast(msg, type = 'info') {
+  const bg = type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#1e293b';
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:#fff;`
+    + `padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;`
+    + `opacity:0;transition:opacity 0.2s;`;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 200); }, 3000);
+}
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(str) {
+  if (str == null) return '';
+  return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,42 @@
+# ── 환경변수 / 비밀 설정 ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# k8s Secret (실제 값 포함 — 절대 커밋 금지)
+k8s/backend-secret.yaml
+!k8s/backend-secret.yaml.example
+
+# ── Python ───────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# ── 로그 / 임시 파일 ──────────────────────────────────────────────
+*.log
+*.tmp
+uploads/
+
+# ── 잘못 생성된 임시/중복 파일 ────────────────────────────────────
+appschemasquery.py
+users_check.txt
+소스코드가
+
+# ── 테스트 / 빌드 캐시 ───────────────────────────────────────────
+.pytest_cache/
+.gradle/
+.streamlit/
+
+# ── IDE ───────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+
+# ── AI 도구 상태 (bkit / Claude Code) ────────────────────────────
+.bkit/
+.claude/

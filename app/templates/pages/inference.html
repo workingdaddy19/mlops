@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Inference Test - AI 데이터 분석{% endblock %}
+
+{% block breadcrumb %}
+  <span>Models</span>
+  <span class="sep">›</span>
+  <span class="current">Inference Test</span>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── 안내 카드 ──────────────────────────────────────── -->
+<div class="card" style="border-left:3px solid var(--primary);">
+  <div style="font-size:13px; color:var(--text-secondary); line-height:1.6;">
+    추론 API <b>URL</b> 과 요청 <b>JSON</b> 을 입력해 호출합니다. 포탈은 추론을 직접 처리하지 않고
+    입력한 엔드포인트(별도 Pod의 invest-app 서비스 등)로 <b>POST 중계</b>만 합니다.
+    <br><span style="color:var(--text-muted);">※ <code>api.mlops.click</code> 도메인 등록 완료 — 외부 인터넷에서도 직접 호출 가능합니다. (Host 헤더는 비워두면 됩니다)</span>
+  </div>
+</div>
+
+<!-- ── 요청 입력 카드 ──────────────────────────────────── -->
+<div class="card" style="margin-top:0;">
+  <div class="card-title">추론 요청</div>
+
+  <div style="margin-bottom:12px;">
+    <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">
+      추론 API URL <span style="color:#ef4444;">*</span>
+    </label>
+    <input id="f-url" type="text" class="form-input" value="{{ inference_url }}"
+           placeholder="http://<ALB>/predict" style="width:100%; box-sizing:border-box; font-family:monospace; font-size:12px;">
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 120px; gap:12px; margin-bottom:12px;">
+    <div>
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">
+        Host 헤더 <span style="color:var(--text-muted);">(선택 · 보통 비움)</span>
+      </label>
+      <input id="f-host" type="text" class="form-input" value="{{ inference_host }}"
+             placeholder="api.mlops.click" style="width:100%; box-sizing:border-box; font-family:monospace; font-size:12px;">
+    </div>
+    <div>
+      <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:4px;">타임아웃(초)</label>
+      <input id="f-timeout" type="number" class="form-input" value="30" min="1" max="120"
+             style="width:100%; box-sizing:border-box;">
+    </div>
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:var(--text-muted); display:flex; justify-content:space-between; margin-bottom:4px;">
+      <span>요청 JSON <span style="color:#ef4444;">*</span></span>
+      <a href="javascript:void(0)" onclick="fillSample()" style="color:var(--primary); font-size:11px;">샘플 채우기</a>
+    </label>
+    <textarea id="f-json" class="form-input" rows="12"
+              style="width:100%; box-sizing:border-box; font-family:monospace; font-size:12px; resize:vertical;"></textarea>
+  </div>
+
+  <div style="display:flex; gap:10px; align-items:center; margin-top:14px;">
+    <button id="btn-run" class="btn btn-primary" onclick="runProxy()" style="padding:10px 28px; font-size:14px;">
+      추론 실행
+    </button>
+    <button class="btn" onclick="resetForm()" style="padding:10px 18px; font-size:13px; background:var(--bg-secondary);">
+      초기화
+    </button>
+    <span id="run-status" style="font-size:12px; color:var(--text-muted);"></span>
+  </div>
+</div>
+
+<!-- ── 응답 카드 ──────────────────────────────────────── -->
+<div id="result-card" class="card" style="margin-top:0; display:none;">
+  <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+    <span>응답</span>
+    <span id="res-badges" style="font-size:12px; font-weight:400;"></span>
+  </div>
+  <pre id="res-json" style="background:var(--bg-secondary); border-radius:8px; padding:16px; overflow:auto; font-size:12px; line-height:1.5; margin:0; max-height:480px;"></pre>
+</div>
+
+<!-- ── 오류 카드 ──────────────────────────────────────── -->
+<div id="error-card" class="card" style="margin-top:0; display:none; border-left:3px solid #ef4444;">
+  <div style="font-size:13px; font-weight:600; color:#ef4444; margin-bottom:6px;">오류</div>
+  <div id="error-msg" style="font-size:12px; color:var(--text-secondary); font-family:monospace; white-space:pre-wrap;"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SAMPLE_PAYLOAD = {
+  gpt_ivt_jg_seq: "JG_TEST_001",
+  ltv_rte: 65.0,
+  dbt_rpy_coef_rte: 1.35,
+  ln_pd: 24.0,
+  bs_itt: 3.25,
+  gpt_ivt_kd_cd: "오피스빌딩",
+  gpt_ivt_ser_dv_cd: "오피스",
+  gpt_ivt_tp_cd: "선순위"
+};
+
+function fillSample() {
+  document.getElementById('f-json').value = JSON.stringify(SAMPLE_PAYLOAD, null, 2);
+}
+
+document.addEventListener('DOMContentLoaded', fillSample);
+
+async function runProxy() {
+  const url = document.getElementById('f-url').value.trim();
+  if (!url) { showError('추론 API URL은 필수입니다.'); return; }
+
+  let payload;
+  try {
+    payload = JSON.parse(document.getElementById('f-json').value);
+  } catch (e) {
+    showError('요청 JSON 형식 오류: ' + e.message);
+    return;
+  }
+
+  const body = {
+    target_url: url,
+    host_header: document.getElementById('f-host').value.trim() || null,
+    payload: payload,
+    timeout: parseInt(document.getElementById('f-timeout').value, 10) || 30,
+  };
+
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('error-card').style.display = 'none';
+  document.getElementById('run-status').textContent = '추론 중...';
+  document.getElementById('btn-run').disabled = true;
+
+  try {
+    const res = await apiFetch('/api/inference/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res) return;
+
+    const d = await res.json();
+    if (!res.ok) {
+      showError(d.detail || JSON.stringify(d, null, 2));
+      return;
+    }
+    showResult(d);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    document.getElementById('run-status').textContent = '';
+    document.getElementById('btn-run').disabled = false;
+  }
+}
+
+function showResult(d) {
+  const okColor = d.ok ? '#10b981' : '#ef4444';
+  document.getElementById('res-badges').innerHTML =
+    `<span style="color:${okColor};">● ${d.status_code}</span>` +
+    `<span style="color:var(--text-muted); margin-left:12px;">${d.elapsed_ms} ms</span>`;
+  const bodyText = typeof d.body === 'string' ? d.body : JSON.stringify(d.body, null, 2);
+  document.getElementById('res-json').textContent = bodyText;
+  document.getElementById('result-card').style.display = 'block';
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-card').style.display = 'block';
+}
+
+function resetForm() {
+  fillSample();
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('error-card').style.display = 'none';
+}
+</script>
+{% endblock %}

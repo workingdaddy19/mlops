@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}사용자 관리 - AI 데이터 분석{% endblock %}
+
+{% block breadcrumb %}
+  <span>Management</span>
+  <span class="sep">›</span>
+  <span class="current">Users</span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <div class="card-title" style="margin-bottom:0;">👥 사용자 관리</div>
+    <button class="btn btn-primary" onclick="openCreateModal()">+ 사용자 추가</button>
+  </div>
+
+  <div id="user-status" style="font-size:13px; color:var(--text-muted); margin-bottom:12px;"></div>
+
+  <div style="overflow-x:auto;">
+    <table class="data-table" id="user-table">
+      <thead>
+        <tr>
+          <th style="width:48px;">ID</th>
+          <th>사용자명</th>
+          <th>이름</th>
+          <th style="width:80px;">역할</th>
+          <th style="min-width:240px;">기능 권한</th>
+          <th style="width:130px;">생성일</th>
+          <th style="width:130px;">작업</th>
+        </tr>
+      </thead>
+      <tbody id="user-tbody">
+        <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">로딩 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 사용자 추가 모달 -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal-box">
+    <div class="modal-title">사용자 추가</div>
+    <div class="form-group">
+      <label class="form-label">사용자명 (로그인 ID) *</label>
+      <input id="f-username" class="form-input" placeholder="예: 09930269">
+    </div>
+    <div class="form-group">
+      <label class="form-label">비밀번호 *</label>
+      <input id="f-password" class="form-input" type="password" placeholder="비워두면 사용자명과 동일">
+    </div>
+    <div class="form-group">
+      <label class="form-label">이름 (표시명)</label>
+      <input id="f-name" class="form-input" placeholder="비워두면 사용자명과 동일">
+    </div>
+    <div class="form-group">
+      <label class="form-label">역할</label>
+      <select id="f-role" class="form-select">
+        <option value="user">user</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
+      <button class="btn btn-secondary" onclick="closeCreateModal()">취소</button>
+      <button class="btn btn-primary" onclick="submitCreate()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사용자 수정 모달 (권한 포함) -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box" style="width:480px; max-width:95vw;">
+    <div class="modal-title">사용자 수정</div>
+    <input type="hidden" id="e-id">
+    <div class="form-group">
+      <label class="form-label">사용자명</label>
+      <input id="e-username" class="form-input" disabled style="opacity:0.6;">
+    </div>
+    <div class="form-group">
+      <label class="form-label">이름</label>
+      <input id="e-name" class="form-input">
+    </div>
+    <div class="form-group">
+      <label class="form-label">역할</label>
+      <select id="e-role" class="form-select" onchange="onRoleChange()">
+        <option value="user">user</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+
+    <!-- 기능 권한 -->
+    <div class="form-group" id="perm-section">
+      <label class="form-label">기능 권한</label>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="s3"> S3 스토리지</label>
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="athena"> Athena DB</label>
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="jupyter"> Jupyter</label>
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="mlflow"> MLFlow</label>
+        <label class="perm-toggle"><input type="checkbox" name="e-perm" value="airflow"> Airflow</label>
+      </div>
+      <div id="perm-admin-note" style="display:none; font-size:11px; color:var(--text-muted); margin-top:6px;">
+        * admin 계정은 모든 기능 자동 허용됩니다.
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
+      <button class="btn btn-secondary" onclick="closeEditModal()">취소</button>
+      <button class="btn btn-primary" onclick="submitEdit()">저장</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.perm-badge {
+  font-size: 10px; padding: 1px 7px; border-radius: 99px;
+  background: var(--border, #e2e8f0); color: var(--text-muted);
+  margin: 1px; display: inline-block; white-space: nowrap;
+}
+.perm-badge.on { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+.perm-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13px; cursor: pointer; padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: 6px;
+  user-select: none; transition: background .1s;
+}
+.perm-toggle:hover { background: var(--bg-secondary); }
+.perm-toggle input { cursor: pointer; }
+</style>
+
+<script>
+const FEATURES = ['s3', 'athena', 'jupyter', 'mlflow', 'airflow'];
+const FEAT_LABEL = { s3:'S3', athena:'Athena', jupyter:'Jupyter', mlflow:'MLFlow', airflow:'Airflow' };
+
+document.addEventListener('DOMContentLoaded', loadUsers);
+
+// ── 목록 로드 ────────────────────────────────────────────────────
+async function loadUsers() {
+  const tbody = document.getElementById('user-tbody');
+  const statusEl = document.getElementById('user-status');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px;">로딩 중...</td></tr>';
+
+  const res = await apiFetch('/api/admin/users');
+  if (!res) return;
+  if (res.status === 403) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:24px;">⛔ 관리자 권한이 필요합니다.</td></tr>';
+    return;
+  }
+
+  const users = await res.json();
+  const me = Auth.getUser();
+  statusEl.textContent = `총 ${users.length}명`;
+
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>${u.id}</td>
+      <td><strong>${escapeHtml(u.username)}</strong></td>
+      <td>${escapeHtml(u.name)}</td>
+      <td>
+        <span style="display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600;
+          background:${u.role==='admin'?'#fce7f3':'#dbeafe'};
+          color:${u.role==='admin'?'#9d174d':'#1d4ed8'};">
+          ${u.role}
+        </span>
+      </td>
+      <td id="perm-badges-${u.id}">
+        ${u.role === 'admin'
+          ? '<span style="font-size:11px; color:#10b981; font-weight:500;">✓ 전체 허용</span>'
+          : '<span style="font-size:11px; color:var(--text-muted);">로딩 중...</span>'
+        }
+      </td>
+      <td style="color:var(--text-muted); font-size:12px;">${u.created_at ? u.created_at.slice(0,10) : '-'}</td>
+      <td>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;"
+          onclick="openEditModal(${u.id},'${escapeAttr(u.username)}','${escapeAttr(u.name)}','${u.role}')">수정</button>
+        ${me && me.id !== u.id
+          ? `<button class="btn btn-danger" style="padding:4px 10px;font-size:12px;margin-left:4px;"
+              onclick="deleteUser(${u.id},'${escapeAttr(u.username)}')">삭제</button>`
+          : ''}
+      </td>
+    </tr>
+  `).join('');
+
+  // 권한 뱃지 비동기 로드 (user role만)
+  for (const u of users) {
+    if (u.role !== 'admin') loadPermBadges(u.id);
+  }
+}
+
+async function loadPermBadges(userId) {
+  const cell = document.getElementById(`perm-badges-${userId}`);
+  if (!cell) return;
+  const res = await apiFetch(`/api/admin/users/${userId}/permissions`);
+  if (!res || !res.ok) { cell.innerHTML = ''; return; }
+  const perms = await res.json();
+  cell.innerHTML = FEATURES.map(f =>
+    `<span class="perm-badge${perms.includes(f) ? ' on' : ''}">${FEAT_LABEL[f]}</span>`
+  ).join('');
+}
+
+// ── 추가 모달 ────────────────────────────────────────────────────
+function openCreateModal() {
+  ['f-username','f-password','f-name'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-role').value = 'user';
+  document.getElementById('createModal').classList.add('open');
+}
+function closeCreateModal() {
+  document.getElementById('createModal').classList.remove('open');
+}
+
+async function submitCreate() {
+  const username = document.getElementById('f-username').value.trim();
+  const password = document.getElementById('f-password').value.trim() || username;
+  const name     = document.getElementById('f-name').value.trim() || username;
+  const role     = document.getElementById('f-role').value;
+  if (!username) { alert('사용자명을 입력하세요.'); return; }
+
+  const res = await apiFetch('/api/admin/users', {
+    method: 'POST',
+    body: JSON.stringify({ username, password, name, role }),
+  });
+  if (!res) return;
+  if (res.ok) {
+    closeCreateModal();
+    loadUsers();
+    showToast('사용자가 추가되었습니다.', 'success');
+  } else {
+    const err = await res.json();
+    showToast(err.detail || '추가 실패', 'error');
+  }
+}
+
+// ── 수정 모달 ────────────────────────────────────────────────────
+async function openEditModal(id, username, name, role) {
+  document.getElementById('e-id').value       = id;
+  document.getElementById('e-username').value = username;
+  document.getElementById('e-name').value     = name;
+  document.getElementById('e-role').value     = role;
+  onRoleChange();
+
+  // 권한 로드
+  const res = await apiFetch(`/api/admin/users/${id}/permissions`);
+  const perms = (res && res.ok) ? await res.json() : [];
+  document.querySelectorAll('[name="e-perm"]').forEach(cb => {
+    cb.checked = perms.includes(cb.value);
+  });
+
+  document.getElementById('editModal').classList.add('open');
+}
+
+function onRoleChange() {
+  const isAdmin = document.getElementById('e-role').value === 'admin';
+  document.getElementById('perm-section').querySelectorAll('input').forEach(cb => {
+    cb.disabled = isAdmin;
+  });
+  document.getElementById('perm-admin-note').style.display = isAdmin ? 'block' : 'none';
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+
+async function submitEdit() {
+  const id   = document.getElementById('e-id').value;
+  const name = document.getElementById('e-name').value.trim();
+  const role = document.getElementById('e-role').value;
+
+  const userRes = await apiFetch(`/api/admin/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name, role }),
+  });
+  if (!userRes || !userRes.ok) {
+    const err = userRes ? await userRes.json() : {};
+    showToast(err.detail || '수정 실패', 'error');
+    return;
+  }
+
+  // 권한 저장 (admin은 DB에 저장 불필요하지만 초기화)
+  const features = role === 'admin'
+    ? []
+    : [...document.querySelectorAll('[name="e-perm"]:checked')].map(cb => cb.value);
+  await apiFetch(`/api/admin/users/${id}/permissions`, {
+    method: 'PUT',
+    body: JSON.stringify({ features }),
+  });
+
+  closeEditModal();
+  loadUsers();
+  showToast('저장되었습니다.', 'success');
+}
+
+// ── 삭제 ─────────────────────────────────────────────────────────
+async function deleteUser(id, username) {
+  if (!confirm(`'${username}' 사용자를 삭제하시겠습니까?`)) return;
+  const res = await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+  if (!res) return;
+  if (res.ok || res.status === 204) {
+    loadUsers();
+    showToast('삭제되었습니다.', 'success');
+  } else {
+    const err = await res.json().catch(() => ({}));
+    showToast(err.detail || '삭제 실패', 'error');
+  }
+}
+
+// ── 유틸 ─────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const bg = type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#1e293b';
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:#fff;`
+    + `padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;`
+    + `opacity:0;transition:opacity 0.2s;`;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 200); }, 3000);
+}
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(str) {
+  if (str == null) return '';
+  return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open');
+});
+</script>
+{% endblock %}

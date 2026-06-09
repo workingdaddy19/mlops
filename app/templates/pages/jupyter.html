@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}ML Analysis - MLFoundry{% endblock %}
+
+{% block breadcrumb %}
+  <span>AI ML</span>
+  <span class="sep">›</span>
+  <span class="current">ML Analysis</span>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div class="card-title" style="margin-bottom: 0;">JupyterHub 환경 선택</div>
+    <button class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;" onclick="loadEnvs()">🔄 새로고침</button>
+  </div>
+
+  <div id="env-status" style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+    환경 목록을 불러오는 중...
+  </div>
+
+  <div id="env-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+    <!-- 카드 동적 삽입 -->
+  </div>
+</div>
+
+<!-- 안내 카드 -->
+<div class="card" style="margin-top: 16px;">
+  <div class="card-title" style="font-size: 14px; margin-bottom: 12px;">💡 JupyterHub 사용 안내</div>
+  <ul style="font-size: 13px; color: var(--text-secondary); line-height: 1.8; margin: 0; padding-left: 20px;">
+    <li>원하는 환경 카드의 <strong>접속</strong> 버튼을 클릭하면 새 탭으로 열립니다.</li>
+    <li>클릭 순간 <strong>1시간 유효 토큰</strong>이 자동 발급되어 로그인 없이 바로 접속됩니다.</li>
+    <li><strong>CPU 환경</strong>: 일반 데이터 분석 및 ML 학습에 사용합니다.</li>
+    <li><strong>GPU 환경</strong>: 딥러닝 모델 학습에 사용합니다.</li>
+    <li>1시간 후 만료되면 다시 <strong>접속</strong> 버튼을 클릭하여 새 토큰을 발급받으세요.</li>
+  </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.env-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.env-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  border-color: var(--primary, #3b82f6);
+}
+.env-card-icon { font-size: 32px; line-height: 1; }
+.env-card-name { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.env-card-badge {
+  display: inline-block; font-size: 11px;
+  padding: 2px 8px; border-radius: 99px; font-weight: 500;
+}
+.badge-cpu   { background: #dbeafe; color: #1d4ed8; }
+.badge-gpu   { background: #fce7f3; color: #9d174d; }
+.badge-token { background: #dcfce7; color: #15803d; }
+.badge-no-token { background: #fef9c3; color: #854d0e; }
+
+.btn-connect {
+  flex: 1; text-align: center; padding: 8px;
+  font-size: 13px; cursor: pointer;
+  border: none; border-radius: 6px;
+}
+.btn-connect:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
+
+<script>
+let currentUsername = '';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // 권한 로드 대기
+  const perms = await loadMyPermissions();
+  
+  if (!perms.includes('jupyter')) {
+    document.getElementById('env-status').innerHTML =
+      '<span style="color:#ef4444;">⛔ Jupyter 접근 권한이 없습니다. 관리자에게 문의하세요.</span>';
+    return;
+  }
+  
+  // 권한이 확인되면 목록 로드
+  await loadEnvs();
+});
+
+// ─── 환경 목록 로드 (토큰 없이 카드만 표시) ───────────────────────────────
+async function loadEnvs() {
+  const statusEl = document.getElementById('env-status');
+  const listEl   = document.getElementById('env-list');
+  statusEl.textContent = '환경 목록을 불러오는 중...';
+  listEl.innerHTML = '';
+
+  try {
+    const res = await apiFetch('/api/jupyter/envs');
+    if (!res) return;
+    const data = await res.json();
+
+    const envs     = data.envs || [];
+    currentUsername = data.username || '';
+
+    if (envs.length === 0) {
+      statusEl.innerHTML = '<span style="color:#ef4444;">환경 정보를 가져올 수 없습니다.</span>';
+      return;
+    }
+
+    statusEl.innerHTML =
+      `<span style="color:var(--text-secondary);">👤 ${escapeHtml(currentUsername)} · 환경 ${envs.length}개</span>`;
+
+    listEl.innerHTML = envs.map((env, idx) => {
+      const isGpu     = (env.server || '').toLowerCase().includes('gpu');
+      const icon      = isGpu ? '🖥️' : '💻';
+      const typeLabel = isGpu ? 'GPU' : 'CPU';
+      const typeBadge = isGpu ? 'badge-gpu' : 'badge-cpu';
+      const tokenBadge = env.token_available ? 'badge-token' : 'badge-no-token';
+      const tokenText  = env.token_available ? '🔑 자동 토큰' : '⚠️ 토큰 미설정';
+
+      return `
+        <div class="env-card">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="env-card-icon">${icon}</div>
+            <div>
+              <div class="env-card-name">${escapeHtml(env.name)}</div>
+              <div style="display:flex; gap:6px; margin-top:4px;">
+                <span class="env-card-badge ${typeBadge}">${typeLabel}</span>
+                <span class="env-card-badge ${tokenBadge}">${tokenText}</span>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--text-muted);">
+            ${env.token_available
+              ? '클릭 시 1시간 토큰 자동 발급 후 새 탭으로 바로 열림'
+              : '⚠️ JUPYTERHUB_ADMIN_TOKEN 미설정 — JupyterHub 로그인 페이지로 이동'}
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="btn-${idx}"
+              class="btn ${env.token_available ? 'btn-primary' : 'btn-secondary'} btn-connect"
+              onclick="openLab('${escapeAttr(env.server)}', ${idx})">
+              🚀 접속
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error(err);
+    statusEl.innerHTML = '<span style="color:#ef4444;">서버 통신 오류가 발생했습니다.</span>';
+  }
+}
+
+// ─── 접속 버튼 클릭 → on-demand 토큰 발급 → 새 탭 열기 ──────────────────
+async function openLab(server, idx) {
+  const btn = document.getElementById(`btn-${idx}`);
+  if (!btn || btn.disabled) return;
+
+  btn.disabled = true;
+  btn.textContent = '🔄 연결 중...';
+
+  try {
+    const res = await apiFetch('/api/jupyter/token', {
+      method: 'POST',
+      body: JSON.stringify({ server }),
+    });
+    if (!res) throw new Error('API 응답이 없습니다.');
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.detail || '토큰 발급 실패');
+    }
+
+    if (data.url) {
+      window.open(data.url, '_blank');
+    } else {
+      throw new Error('URL을 받지 못했습니다.');
+    }
+  } catch (err) {
+    console.error(err);
+    const errorMsg = err.message || '';
+    if (errorMsg.includes('403') || errorMsg.includes('권한')) {
+      showErrorModal(
+        '🔑 JupyterHub 권한 오류',
+        `JupyterHub Admin API 토큰의 권한(scope)이 부족하여 사용자 토큰을 자동으로 발급하지 못했습니다.<br><br>` +
+        `<span style="color:#ef4444;font-weight:600;">상세 오류:</span> ${escapeHtml(errorMsg)}<br><br>` +
+        `<strong>[해결 방법]</strong><br>` +
+        `<ol style="padding-left:16px; margin-top:6px;">` +
+        `  <li>JupyterHub Pod 내부에서 CLI 명령어로 권한 제한이 없는 무제한 토큰을 발급받으세요.<br>` +
+        `    <code style="background:var(--bg-secondary); padding:2px 6px; border-radius:4px; font-family:monospace; display:block; margin:6px 0; border:1px solid var(--border); overflow-x:auto;">kubectl exec -n jupyterhub -it &lt;hub-pod-name&gt; -- jupyterhub token admin</code>` +
+        `  </li>` +
+        `  <li>발급받은 토큰을 포털의 <strong>Management &gt; Settings</strong> 메뉴의 <strong>JupyterHub Admin API 토큰</strong> 값에 넣고 저장하세요.</li>` +
+        `</ol>`
+      );
+    } else {
+      showErrorModal(
+        '⚠️ JupyterHub 접속 실패',
+        `JupyterHub 접속 중 오류가 발생했습니다.<br><br><span style="color:#ef4444;font-weight:600;">상세 오류:</span> ${escapeHtml(errorMsg)}`
+      );
+    }
+    showToast(`접속 실패: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 접속';
+  }
+}
+
+function showErrorModal(title, htmlContent) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999;`;
+
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+  box.style.cssText = `background:var(--bg-content, #fff); border-radius:12px; padding:24px; width:480px; max-width:90vw; box-shadow:0 10px 30px rgba(0,0,0,0.25); border: 1px solid var(--border);`;
+
+  box.innerHTML = `
+    <div style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:14px; display:flex; align-items:center; gap:8px;">${title}</div>
+    <div style="font-size:13px; color:var(--text-secondary); line-height:1.6; margin-bottom:20px; word-break:break-all;">${htmlContent}</div>
+    <div style="text-align:right;">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()" style="padding:6px 16px; font-size:12px; cursor:pointer;">닫기</button>
+    </div>
+  `;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+// ─── 토스트 알림 ──────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const bg = type === 'error' ? '#ef4444' : '#1e293b';
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;background:${bg};color:#fff;`
+    + `padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;`
+    + `opacity:0;transition:opacity 0.2s;`;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  setTimeout(() => {
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 200);
+  }, 3000);
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(str) {
+  if (str == null) return '';
+  return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+{% endblock %}
+

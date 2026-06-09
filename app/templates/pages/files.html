@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}S3 스토리지 - MLFoundry{% endblock %}
+
+{% block breadcrumb %}
+  <span>S3 스토리지</span>
+  <span class="sep">›</span>
+  <span class="current" id="breadcrumb-path">루트</span>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; gap: 0; height: calc(100vh - 160px); min-height: 500px;">
+
+  <!-- 좌측: 폴더 트리 -->
+  <div style="width: 260px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px 0 0 8px; background: var(--bg-secondary); overflow-y: auto; padding: 12px 0;">
+    <div style="padding: 8px 16px 12px; font-size: 12px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.05em; border-bottom: 1px solid var(--border); margin-bottom: 8px;">
+      🗄️ {{ s3_bucket }}
+    </div>
+    <div id="folder-tree">
+      <!-- 루트 노드 -->
+      <div class="tree-node tree-root" data-prefix="" onclick="selectFolder('')">
+        <span class="tree-toggle" onclick="event.stopPropagation(); toggleFolder(this, '')">▶</span>
+        <span class="tree-icon">📁</span>
+        <span class="tree-label">/ (루트)</span>
+      </div>
+      <div id="children-" class="tree-children" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- 우측: 파일 목록 -->
+  <div style="flex: 1; border: 1px solid var(--border); border-left: none; border-radius: 0 8px 8px 0; overflow: hidden; display: flex; flex-direction: column;">
+    <!-- 툴바 -->
+    <div style="padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div id="current-path-display" style="font-size: 13px; color: var(--text-muted); font-family: monospace;">
+        s3://{{ s3_bucket }}/
+      </div>
+      <button class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;" onclick="refreshCurrent()">🔄 새로고침</button>
+    </div>
+
+    <!-- 테이블 헤더 -->
+    <div style="overflow-x: auto; flex: 1;">
+      <table class="data-table" style="min-width: 500px;">
+        <thead>
+          <tr>
+            <th style="width: 40px;"></th>
+            <th>이름</th>
+            <th style="width: 100px; text-align: right;">크기</th>
+            <th style="width: 160px;">수정일</th>
+            <th style="width: 80px; text-align: center;">다운로드</th>
+          </tr>
+        </thead>
+        <tbody id="file-list">
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 60px; color: var(--text-muted);">
+              좌측 폴더를 선택하거나 로딩 중...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.tree-node {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px 4px 12px; cursor: pointer;
+  font-size: 13px; user-select: none;
+  border-radius: 4px; margin: 1px 4px;
+  transition: background 0.1s;
+}
+.tree-node:hover { background: var(--hover-bg, rgba(0,0,0,0.05)); }
+.tree-node.selected { background: var(--primary-light, rgba(59,130,246,0.1)); color: var(--primary); font-weight: 500; }
+.tree-toggle {
+  width: 16px; text-align: center; font-size: 10px;
+  color: var(--text-muted); flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.tree-toggle.open { transform: rotate(90deg); }
+.tree-children { margin-left: 16px; }
+.tree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-icon { flex-shrink: 0; }
+</style>
+
+<script>
+let currentPrefix = '';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const perms = await loadMyPermissions();
+  if (!perms.includes('s3')) {
+    const tree = document.getElementById('folder-tree');
+    tree.style.pointerEvents = 'none';
+    tree.style.opacity = '0.4';
+    document.getElementById('file-list').innerHTML =
+      '<tr><td colspan="5" style="text-align:center; padding:60px; color:#ef4444;">' +
+      '⛔ S3 스토리지 접근 권한이 없습니다. 관리자에게 문의하세요.</td></tr>';
+    document.getElementById('current-path-display').textContent = '권한 없음';
+    return;
+  }
+  selectFolder('');
+});
+
+// 폴더 선택 → 우측 파일 목록 갱신
+async function selectFolder(prefix) {
+  currentPrefix = prefix;
+
+  // 선택 상태 표시
+  document.querySelectorAll('.tree-node').forEach(n => n.classList.remove('selected'));
+  const nodes = document.querySelectorAll(`.tree-node[data-prefix="${CSS.escape(prefix)}"]`);
+  nodes.forEach(n => n.classList.add('selected'));
+
+  // 경로 표시 업데이트
+  const pathDisplay = prefix || '/';
+  document.getElementById('current-path-display').textContent = `s3://{{ s3_bucket }}/${prefix}`;
+  document.getElementById('breadcrumb-path').textContent = prefix ? prefix.replace(/\/$/, '') : '루트';
+
+  // 파일 목록 로드
+  await loadFiles(prefix);
+}
+
+// 파일 목록 API 호출
+async function loadFiles(prefix) {
+  const listEl = document.getElementById('file-list');
+  listEl.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);">불러오는 중...</td></tr>';
+
+  try {
+    const res = await apiFetch(`/api/s3/browse?prefix=${encodeURIComponent(prefix)}`);
+    if (!res) return;
+    const data = await res.json();
+
+    const rows = [];
+
+    // 폴더 행
+    for (const folder of (data.folders || [])) {
+      rows.push(`
+        <tr style="cursor:pointer;" onclick="selectAndExpand('${escapeAttr(folder.prefix)}')">
+          <td style="text-align:center;">📁</td>
+          <td style="font-weight:500;">${escapeHtml(folder.name)}/</td>
+          <td></td>
+          <td style="color:var(--text-muted);font-size:12px;">-</td>
+          <td></td>
+        </tr>
+      `);
+    }
+
+    // 파일 행
+    for (const file of (data.files || [])) {
+      rows.push(`
+        <tr>
+          <td style="text-align:center;">📄</td>
+          <td>${escapeHtml(file.name)}</td>
+          <td style="text-align:right;color:var(--text-secondary);font-size:13px;">${escapeHtml(file.size_display)}</td>
+          <td style="color:var(--text-muted);font-size:12px;">${escapeHtml(file.last_modified)}</td>
+          <td style="text-align:center;">
+            <button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;"
+              onclick="downloadFile('${escapeAttr(file.key)}')">⬇</button>
+          </td>
+        </tr>
+      `);
+    }
+
+    if (rows.length === 0) {
+      listEl.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);">비어 있습니다.</td></tr>';
+    } else {
+      listEl.innerHTML = rows.join('');
+    }
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#ef4444;">데이터를 불러오는 데 실패했습니다.</td></tr>';
+  }
+}
+
+// 폴더 클릭 시 선택 + 트리 펼치기
+function selectAndExpand(prefix) {
+  selectFolder(prefix);
+  // 트리에 해당 노드가 있으면 펼치기
+  const node = document.querySelector(`.tree-node[data-prefix="${CSS.escape(prefix)}"]`);
+  if (node) {
+    const toggle = node.querySelector('.tree-toggle');
+    if (toggle && !toggle.classList.contains('open')) {
+      toggleFolder(toggle, prefix);
+    }
+  } else {
+    // 트리에 없으면 루트부터 경로 펼치기
+    loadTreeChildren('', prefix);
+  }
+}
+
+// 트리 폴더 펼치기/접기
+async function toggleFolder(toggleEl, prefix) {
+  const childContainer = document.getElementById(`children-${prefix}`);
+  if (!childContainer) return;
+
+  const isOpen = toggleEl.classList.contains('open');
+
+  if (isOpen) {
+    toggleEl.classList.remove('open');
+    childContainer.style.display = 'none';
+  } else {
+    toggleEl.classList.add('open');
+    childContainer.style.display = 'block';
+
+    // 자식이 없으면 로드
+    if (childContainer.children.length === 0) {
+      await loadTreeChildren(prefix);
+    }
+  }
+}
+
+// 트리 자식 폴더 로드
+async function loadTreeChildren(prefix, expandTo) {
+  const childContainer = document.getElementById(`children-${prefix}`);
+  if (!childContainer) return;
+
+  childContainer.innerHTML = '<div style="padding:4px 8px;font-size:12px;color:var(--text-muted);">로딩 중...</div>';
+
+  try {
+    const res = await apiFetch(`/api/s3/browse?prefix=${encodeURIComponent(prefix)}`);
+    if (!res) return;
+    const data = await res.json();
+    const folders = data.folders || [];
+
+    if (folders.length === 0) {
+      childContainer.innerHTML = '';
+      // 토글 화살표 숨기기
+      const parentNode = document.querySelector(`.tree-node[data-prefix="${CSS.escape(prefix)}"]`);
+      if (parentNode) {
+        const toggle = parentNode.querySelector('.tree-toggle');
+        if (toggle) toggle.style.visibility = 'hidden';
+      }
+      return;
+    }
+
+    childContainer.innerHTML = folders.map(folder => `
+      <div class="tree-node" data-prefix="${escapeAttr(folder.prefix)}" onclick="selectFolder('${escapeAttr(folder.prefix)}')">
+        <span class="tree-toggle" onclick="event.stopPropagation(); toggleFolder(this, '${escapeAttr(folder.prefix)}')">▶</span>
+        <span class="tree-icon">📁</span>
+        <span class="tree-label">${escapeHtml(folder.name)}</span>
+      </div>
+      <div id="children-${escapeAttr(folder.prefix)}" class="tree-children" style="display:none;"></div>
+    `).join('');
+
+  } catch (err) {
+    console.error('Tree load error:', err);
+    childContainer.innerHTML = '';
+  }
+}
+
+// 파일 다운로드
+async function downloadFile(key) {
+  try {
+    const res = await apiFetch(`/api/s3/download?key=${encodeURIComponent(key)}`);
+    if (!res) return;
+    const data = await res.json();
+    if (data.url) {
+      window.open(data.url, '_blank');
+    }
+  } catch (err) {
+    console.error('Download error:', err);
+    alert('다운로드 URL 생성에 실패했습니다.');
+  }
+}
+
+// 현재 폴더 새로고침
+function refreshCurrent() {
+  loadFiles(currentPrefix);
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(str) {
+  if (str == null) return '';
+  return String(str).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+</script>
+{% endblock %}

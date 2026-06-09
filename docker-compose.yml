@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # FastAPI 백엔드 앱 (로컬 테스트용)
+  # ==========================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mlfoundry-backend
+    ports:
+      - "6080:6080"
+    env_file:
+      - .env
+    # AWS 크레덴셜: ~/.aws 마운트 (Windows 경로)
+    volumes:
+      - ${USERPROFILE}/.aws:/root/.aws:ro
+    depends_on: []
+    restart: unless-stopped
+
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    container_name: mlfoundry-jupyter
+    ports:
+      - "6888:8888"
+    environment:
+      JUPYTER_TOKEN: mlfoundry_token
+      JUPYTER_ENABLE_LAB: "yes"
+    volumes:
+      - jupyter-notebooks:/home/jovyan/work
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.18.0
+    container_name: mlfoundry-mlflow
+    ports:
+      - "6050:5000"
+    command: ["bash", "-c", "pip install psycopg2-binary -q && mlflow server --backend-store-uri postgresql://ai_ready:${DB_PASSWORD}@192.168.6.13:5432/mlfoundry_mlflow --artifacts-destination /mlflow/artifacts --serve-artifacts --host 0.0.0.0 --port 5000"]
+    volumes:
+      - mlflow-artifacts:/mlflow/artifacts
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  jupyter-notebooks:
+  mlflow-artifacts:

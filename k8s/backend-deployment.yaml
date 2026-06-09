@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlops
+  namespace: mlops
+  labels:
+    app: mlops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlops
+  template:
+    metadata:
+      labels:
+        app: mlops
+    spec:
+      serviceAccountName: mlops-aws-access
+      # IRSA(IAM Roles for Service Accounts) 미사용 시 아래 주석 해제
+      # imagePullSecrets:
+      #   - name: ecr-registry-secret
+      containers:
+        - name: mlops
+          # ==========================================
+          # 본인의 ECR 이미지 URI로 교체하세요
+          # ==========================================
+          image: 891376975666.dkr.ecr.ap-northeast-2.amazonaws.com/mlops/app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 6080
+          envFrom:
+            - secretRef:
+                name: backend-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 6080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 6080
+            initialDelaySeconds: 15
+            periodSeconds: 5

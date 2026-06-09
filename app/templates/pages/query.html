@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}EDA Query - MLFoundry{% endblock %}
+
+{% block breadcrumb %}
+  <span>Data</span>
+  <span class="sep">›</span>
+  <span class="current">EDA Query</span>
+{% endblock %}
+
+{% block content %}
+<!-- 탭 헤더 -->
+<div style="display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid var(--border);">
+  <button id="tab-athena"  class="query-tab active" onclick="switchTab('athena')">☁️ AWS Athena</button>
+  <button id="tab-local"   class="query-tab"        onclick="switchTab('local')">🗄️ 로컬 DB</button>
+  <button id="tab-history" class="query-tab"        onclick="switchTab('history')">📋 쿼리 기록</button>
+</div>
+
+<!-- =========================================================
+     AWS Athena 패널 (사이드바 레이아웃)
+     ========================================================= -->
+<div id="panel-athena">
+  <div style="display:flex; gap:0; height:calc(100vh - 220px); min-height:520px;">
+
+    <!-- 좌측: DB / 테이블 트리 -->
+    <div style="width:220px; flex-shrink:0; border:1px solid var(--border); border-radius:8px 0 0 8px; background:var(--bg-secondary); overflow-y:auto; display:flex; flex-direction:column;">
+      <div style="padding:8px 12px 10px; font-size:12px; font-weight:600; color:var(--text-muted); letter-spacing:.05em; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <span>☁️ Athena</span>
+        <button onclick="loadAthenaDbs()" title="새로고침"
+          style="background:none; border:none; cursor:pointer; font-size:13px; color:var(--text-muted); padding:2px 4px; line-height:1;">🔄</button>
+      </div>
+      <div id="athena-tree" style="flex:1; padding:6px 0; overflow-y:auto;">
+        <div style="padding:8px 12px; font-size:12px; color:var(--text-muted);">로딩 중...</div>
+      </div>
+    </div>
+
+    <!-- 우측: SQL 편집기 + 결과 -->
+    <div style="flex:1; border:1px solid var(--border); border-left:none; border-radius:0 8px 8px 0; overflow:hidden; display:flex; flex-direction:column;">
+
+      <!-- 툴바 -->
+      <div style="padding:8px 12px; border-bottom:1px solid var(--border); background:var(--bg-secondary); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+        <span id="athena-selected-table" style="font-size:12px; color:var(--text-muted); font-family:monospace;">테이블을 선택하거나 직접 SQL 입력</span>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div id="athena-status" style="font-size:12px; color:var(--text-secondary);"></div>
+          <button class="btn btn-primary" onclick="runAthenaQuery()" style="padding:5px 14px; font-size:13px;">
+            ⚡ 실행
+          </button>
+        </div>
+      </div>
+
+      <!-- SQL 편집기 -->
+      <div style="padding:10px 12px; border-bottom:1px solid var(--border); flex-shrink:0;">
+        <textarea id="athena-sql" class="form-input"
+          style="width:100%; height:140px; font-family:monospace; padding:10px; font-size:14px; resize:vertical;"
+          placeholder="SELECT * FROM database.table LIMIT 100"></textarea>
+      </div>
+
+      <!-- 결과 영역 -->
+      <div style="flex:1; overflow:auto; padding:10px 12px;">
+        <div id="athena-result-placeholder" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px;">
+          좌측에서 테이블을 선택하거나 SQL을 직접 입력 후 실행하세요
+        </div>
+        <div id="athena-result" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="font-size:13px; font-weight:600;">쿼리 결과</span>
+            <span id="athena-row-count" style="font-size:13px; font-weight:500; color:var(--primary);"></span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table id="athena-table-result" class="data-table">
+              <thead><tr id="athena-head"></tr></thead>
+              <tbody id="athena-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     로컬 DB 패널
+     ========================================================= -->
+<div id="panel-local" style="display:none;">
+  <div class="card">
+    <div class="card-title">SQL 쿼리 실행 (로컬 DB)</div>
+    <div style="margin-bottom:16px;">
+      <textarea id="sql-input" class="form-input"
+        style="width:100%; height:160px; font-family:monospace; padding:12px; font-size:14px;"
+        placeholder="SELECT * FROM users LIMIT 10">SELECT * FROM users LIMIT 10</textarea>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <button class="btn btn-primary" onclick="runLocalQuery()">
+        <span class="icon">⚡</span> 실행 (Ctrl+Enter)
+      </button>
+      <div id="local-status" style="font-size:13px; color:var(--text-secondary);"></div>
+    </div>
+  </div>
+  <div id="local-result" class="card" style="display:none; overflow-x:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div class="card-title" style="margin-bottom:0;">실행 결과</div>
+      <div id="local-row-count" style="font-size:13px; font-weight:500; color:var(--primary);"></div>
+    </div>
+    <table id="local-table" class="data-table">
+      <thead><tr id="local-head"></tr></thead>
+      <tbody id="local-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- =========================================================
+     쿼리 기록 패널
+     ========================================================= -->
+<div id="panel-history" style="display:none;">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div class="card-title" style="margin-bottom:0;">📋 쿼리 실행 기록</div>
+      <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" onclick="loadHistory()">🔄 새로고침</button>
+    </div>
+    <div id="history-status" style="font-size:13px; color:var(--text-muted); margin-bottom:8px;"></div>
+    <div style="overflow-x:auto;">
+      <table class="data-table" id="history-table">
+        <thead>
+          <tr>
+            <th style="width:140px;">실행 시각</th>
+            <th style="width:70px; text-align:center;">상태</th>
+            <th style="width:70px; text-align:right;">행 수</th>
+            <th>SQL</th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+          <tr><td colspan="4" style="text-align:center; color:var(--text-muted);">불러오는 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.query-tab {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+}
+.query-tab:hover { color: var(--text-primary); }
+.query-tab.active { color: var(--primary, #3b82f6); border-bottom-color: var(--primary, #3b82f6); }
+
+/* Athena 트리 */
+.atree-node {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px 4px 10px; cursor: pointer;
+  font-size: 12px; user-select: none;
+  border-radius: 4px; margin: 1px 4px;
+  transition: background .1s;
+}
+.atree-node:hover { background: var(--hover-bg, rgba(0,0,0,.05)); }
+.atree-table.selected { background: var(--primary-light, rgba(59,130,246,.12)); color: var(--primary); font-weight: 500; }
+.atree-toggle { width: 14px; flex-shrink: 0; font-size: 10px; color: var(--text-muted); text-align: center; }
+.atree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atree-children { margin-left: 12px; }
+.atree-count { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+</style>
+
+<script>
+// ──────────────────────────────────────────
+// 탭 전환
+// ──────────────────────────────────────────
+let currentTab = 'athena';
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('panel-athena').style.display  = tab === 'athena'  ? '' : 'none';
+  document.getElementById('panel-local').style.display   = tab === 'local'   ? '' : 'none';
+  document.getElementById('panel-history').style.display = tab === 'history' ? '' : 'none';
+  document.getElementById('tab-athena').classList.toggle('active',  tab === 'athena');
+  document.getElementById('tab-local').classList.toggle('active',   tab === 'local');
+  document.getElementById('tab-history').classList.toggle('active', tab === 'history');
+
+  if (tab === 'history') loadHistory();
+}
+
+// ──────────────────────────────────────────
+// 쿼리 기록
+// ──────────────────────────────────────────
+async function loadHistory() {
+  const tbody = document.getElementById('history-body');
+  const statusEl = document.getElementById('history-status');
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">불러오는 중...</td></tr>';
+  try {
+    const res = await apiFetch('/api/query/history');
+    if (!res.ok) { statusEl.textContent = '기록 조회 실패'; return; }
+    const items = await res.json();
+    statusEl.textContent = `총 ${items.length}건`;
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">실행 기록 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(h => `
+      <tr>
+        <td style="font-size:12px; color:var(--text-muted); white-space:nowrap;">${escapeHtml(h.executed_at?.replace('T',' ').slice(0,19) || '')}</td>
+        <td style="text-align:center;">
+          <span style="font-size:11px; padding:2px 6px; border-radius:4px; background:${h.status==='success'?'#d1fae5':'#fee2e2'}; color:${h.status==='success'?'#065f46':'#991b1b'};">
+            ${h.status === 'success' ? '성공' : '실패'}
+          </span>
+        </td>
+        <td style="text-align:right; color:var(--text-muted);">${h.row_count ?? '-'}</td>
+        <td><pre style="margin:0; font-size:12px; white-space:pre-wrap; max-height:60px; overflow:hidden;">${escapeHtml(h.sql_text)}</pre></td>
+      </tr>`).join('');
+  } catch(e) {
+    statusEl.textContent = '조회 오류';
+  }
+}
+
+// ──────────────────────────────────────────
+// 로컬 DB
+// ──────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('sql-input').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') runLocalQuery();
+  });
+  document.getElementById('athena-sql').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') runAthenaQuery();
+  });
+
+  // Athena 권한 확인
+  const perms = await loadMyPermissions();
+  if (!perms.includes('athena')) {
+    const sqlEl = document.getElementById('athena-sql');
+    sqlEl.disabled = true;
+    sqlEl.placeholder = '⛔ Athena 접근 권한이 없습니다.';
+    const runBtn = document.querySelector('button[onclick="runAthenaQuery()"]');
+    if (runBtn) { runBtn.disabled = true; runBtn.title = '관리자에게 Athena 권한을 요청하세요.'; }
+    document.getElementById('athena-status').innerHTML =
+      '<span style="color:#ef4444;">⛔ Athena DB 접근 권한이 없습니다.</span>';
+    document.getElementById('athena-tree').innerHTML =
+      '<div style="padding:8px 12px; font-size:12px; color:#ef4444;">권한 없음</div>';
+  } else {
+    loadAthenaDbs();
+  }
+});
+
+async function runLocalQuery() {
+  const sql = document.getElementById('sql-input').value.trim();
+  const statusEl   = document.getElementById('local-status');
+  const resultCard = document.getElementById('local-result');
+  if (!sql) return;
+
+  statusEl.textContent = '쿼리 실행 중...';
+  resultCard.style.display = 'none';
+  const t0 = Date.now();
+
+  try {
+    const res = await apiFetch('/api/query/execute', {
+      method: 'POST',
+      body: JSON.stringify({ sql, limit: 500 }),
+    });
+    const data = await res.json();
+    const ms = Date.now() - t0;
+
+    if (!res.ok) {
+      statusEl.innerHTML = `<span style="color:#ef4444;">오류: ${escapeHtml(data.detail || '알 수 없는 오류')}</span>`;
+      return;
+    }
+    statusEl.textContent = `완료 (${ms}ms)`;
+    renderResult('local-head', 'local-body', 'local-row-count', 'local-result', data);
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = '서버 통신 오류';
+  }
+}
+
+// ──────────────────────────────────────────
+// AWS Athena 트리
+// ──────────────────────────────────────────
+let athenaDbMeta = [];
+
+async function loadAthenaDbs() {
+  const treeEl = document.getElementById('athena-tree');
+  const statusEl = document.getElementById('athena-status');
+  treeEl.innerHTML = '<div style="padding:8px 12px; font-size:12px; color:var(--text-muted);">로딩 중...</div>';
+
+  try {
+    const res = await apiFetch('/api/query/athena/databases');
+    if (!res) return;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      statusEl.innerHTML = `<span style="color:#ef4444;">오류: ${escapeHtml(err.detail || '')}</span>`;
+      treeEl.innerHTML = '<div style="padding:8px 12px; font-size:12px; color:#ef4444;">목록 조회 실패</div>';
+      return;
+    }
+    athenaDbMeta = await res.json();
+
+    if (athenaDbMeta.length === 0) {
+      treeEl.innerHTML = '<div style="padding:8px 12px; font-size:12px; color:var(--text-muted);">데이터베이스 없음</div>';
+      return;
+    }
+
+    treeEl.innerHTML = athenaDbMeta.map(db => {
+      const dbKey = escapeAttr(db.database);
+      const tables = db.tables || [];
+      const tableError = db.table_error
+        ? `<div style="padding:3px 8px 3px 28px; font-size:11px; color:#ef4444;" title="${escapeAttr(db.table_error)}">⚠ 조회 실패</div>`
+        : '';
+      const tableRows = db.table_error ? tableError
+        : tables.length === 0
+        ? `<div style="padding:3px 8px 3px 28px; font-size:11px; color:var(--text-muted);">테이블 없음</div>`
+        : tables.map(t => `
+            <div class="atree-node atree-table"
+              data-db="${escapeAttr(db.database)}"
+              data-table="${escapeAttr(t)}"
+              onclick="selectAthenaTable('${escapeAttr(db.database)}','${escapeAttr(t)}')">
+              <span style="width:14px; flex-shrink:0;"></span>
+              <span style="flex-shrink:0;">📄</span>
+              <span class="atree-label">${escapeHtml(t)}</span>
+            </div>`).join('');
+
+      return `
+        <div>
+          <div class="atree-node atree-db" onclick="toggleAthenaDb('${dbKey}')">
+            <span class="atree-toggle" id="atree-toggle-${dbKey}">▶</span>
+            <span style="flex-shrink:0;">🗄️</span>
+            <span class="atree-label">${escapeHtml(db.database)}</span>
+            <span class="atree-count">${tables.length}</span>
+          </div>
+          <div id="atree-children-${dbKey}" class="atree-children" style="display:none;">
+            ${tableRows}
+          </div>
+        </div>`;
+    }).join('');
+
+    statusEl.textContent = `DB ${athenaDbMeta.length}개`;
+  } catch (err) {
+    console.error(err);
+    treeEl.innerHTML = '<div style="padding:8px 12px; font-size:12px; color:#ef4444;">조회 오류</div>';
+    statusEl.textContent = '';
+  }
+}
+
+function toggleAthenaDb(dbKey) {
+  const children = document.getElementById(`atree-children-${dbKey}`);
+  const toggle   = document.getElementById(`atree-toggle-${dbKey}`);
+  if (!children) return;
+  const isOpen = children.style.display !== 'none';
+  children.style.display = isOpen ? 'none' : 'block';
+  toggle.textContent = isOpen ? '▶' : '▼';
+}
+
+function selectAthenaTable(db, table) {
+  // 선택 강조
+  document.querySelectorAll('.atree-table').forEach(n => n.classList.remove('selected'));
+  const node = document.querySelector(`.atree-table[data-db="${CSS.escape(db)}"][data-table="${CSS.escape(table)}"]`);
+  if (node) node.classList.add('selected');
+
+  document.getElementById('athena-selected-table').textContent = `${db}.${table}`;
+  document.getElementById('athena-sql').value = `SELECT *\nFROM ${db}.${table}\nLIMIT 100`;
+
+  // DB 노드 자동 펼치기
+  const dbKey = db;
+  const children = document.getElementById(`atree-children-${dbKey}`);
+  if (children && children.style.display === 'none') toggleAthenaDb(dbKey);
+}
+
+async function runAthenaQuery() {
+  const sql = document.getElementById('athena-sql').value.trim();
+  const statusEl       = document.getElementById('athena-status');
+  const resultDiv      = document.getElementById('athena-result');
+  const placeholderDiv = document.getElementById('athena-result-placeholder');
+  if (!sql) return;
+
+  statusEl.textContent = '⏳ 실행 중... (최대 60초)';
+  resultDiv.style.display = 'none';
+  placeholderDiv.style.display = 'none';
+  const t0 = Date.now();
+
+  try {
+    const res = await apiFetch('/api/query/athena/execute', {
+      method: 'POST',
+      body: JSON.stringify({ sql, max_rows: 500 }),
+    });
+    const data = await res.json();
+    const ms = Date.now() - t0;
+
+    if (!res.ok) {
+      statusEl.innerHTML = `<span style="color:#ef4444;">오류: ${escapeHtml(data.detail || '알 수 없는 오류')}</span>`;
+      placeholderDiv.style.display = 'flex';
+      return;
+    }
+    const truncated = data.truncated ? ' (일부만 표시)' : '';
+    statusEl.textContent = `완료 (${(ms/1000).toFixed(1)}s)${truncated}`;
+    renderResult('athena-head', 'athena-body', 'athena-row-count', 'athena-result', data);
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = '실행 오류';
+    placeholderDiv.style.display = 'flex';
+  }
+}
+
+// ──────────────────────────────────────────
+// 공통 결과 렌더
+// ──────────────────────────────────────────
+function renderResult(headId, bodyId, countId, cardId, data) {
+  const headEl  = document.getElementById(headId);
+  const bodyEl  = document.getElementById(bodyId);
+  const countEl = document.getElementById(countId);
+  const cardEl  = document.getElementById(cardId);
+
+  countEl.textContent = `총 ${data.row_count}개 행`;
+  headEl.innerHTML = (data.columns || []).map(c => `<th>${escapeHtml(c)}</th>`).join('');
+  bodyEl.innerHTML = (data.rows || []).map(row =>
+    `<tr>${(Array.isArray(row) ? row : []).map(v =>
+      `<td>${v != null ? escapeHtml(String(v)) : '<span style="color:var(--text-muted)">null</span>'}</td>`
+    ).join('')}</tr>`
+  ).join('');
+
+  // placeholder 숨기기 (Athena 전용)
+  const ph = document.getElementById('athena-result-placeholder');
+  if (ph) ph.style.display = 'none';
+  cardEl.style.display = 'block';
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(str) {
+  if (str == null) return '';
+  return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+{% endblock %}

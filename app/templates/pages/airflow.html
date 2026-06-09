@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Airflow - MLFoundry{% endblock %}
+
+{% block breadcrumb %}
+  <span>Pipeline</span>
+  <span class="sep">›</span>
+  <span class="current">Airflow</span>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="text-align:center; padding:48px 24px;">
+  <div style="font-size:48px; margin-bottom:16px;">🌀</div>
+  <div style="font-size:18px; font-weight:700; margin-bottom:8px;">Airflow 워크플로우 관리</div>
+  <div style="font-size:13px; color:var(--text-muted); margin-bottom:28px;" id="airflow-url-text">
+    연결 중...
+  </div>
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <button id="btn-open-airflow" class="btn btn-primary" style="font-size:15px; padding:12px 32px;"
+      onclick="openAirflow()">
+      🚀 Airflow 열기
+    </button>
+  </div>
+  <div style="margin-top:20px;">
+    <span id="health-badge" style="font-size:12px; color:var(--text-muted);">상태 확인 중...</span>
+  </div>
+</div>
+
+<div class="card" style="margin-top:0;">
+  <div class="card-title" style="font-size:13px; margin-bottom:8px;">💡 사용 안내</div>
+  <ul style="font-size:13px; color:var(--text-secondary); line-height:1.8; margin:0; padding-left:20px;">
+    <li>버튼 클릭 시 Airflow UI가 <strong>새 탭</strong>으로 열립니다.</li>
+    <li>DAG 목록 확인, 스케줄 관리, 실행 이력을 조회합니다.</li>
+    <li>파이프라인 트리거 및 로그 모니터링에 활용합니다.</li>
+  </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 기본 URL 즉시 설정 — health 체크 실패해도 버튼 동작
+let airflowUrl = 'http://airflow.mlops.click';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // 권한 확인
+  const perms = await loadMyPermissions();
+  const btn = document.getElementById('btn-open-airflow');
+  if (!perms.includes('airflow')) {
+    btn.disabled = true;
+    btn.textContent = '🔒 Airflow 접근 권한 없음';
+    btn.title = '관리자에게 Airflow 접근 권한을 요청하세요.';
+  }
+
+  // 서비스 상태 확인 (실패해도 버튼은 동작)
+  try {
+    const res = await apiFetch('/api/airflow/health');
+    if (!res) return;
+    const d = await res.json();
+    if (d.url) airflowUrl = d.url;
+    document.getElementById('airflow-url-text').textContent = airflowUrl;
+    const badge = document.getElementById('health-badge');
+    badge.innerHTML = d.status === 'ok'
+      ? '<span style="color:#10b981;">● 서비스 정상</span>'
+      : '<span style="color:#ef4444;">● 서비스 응답 없음</span>';
+  } catch {
+    document.getElementById('airflow-url-text').textContent = airflowUrl;
+    document.getElementById('health-badge').innerHTML = '<span style="color:#f59e0b;">● 상태 확인 불가</span>';
+  }
+});
+
+function openAirflow() {
+  window.open(airflowUrl, '_blank');
+}
+</script>
+{% endblock %}
+
