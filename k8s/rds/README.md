@@ -151,11 +151,11 @@ psql -h rds-an2-avb-poc-mlops.cza602u202u8.ap-northeast-2.rds.amazonaws.com \
 
 ## 🔐 사용자별 권한 요약
 
-| 사용자 | 암호 | 권한 | 용도 |
+| 사용자 | `` | 권한 | 용도 |
 |--------|------|------|------|
-| `mlops` | `kyobo11!` | 전체 (CREATE, INSERT, UPDATE, DELETE) | FastAPI 앱 |
-| `mlops_readonly` | `kyobo_readonly123` | SELECT only | BI 도구, 분석 |
-| `mlops_admin` | `kyobo_admin123` | CREATE, DROP, ALTER, 사용자 관리 | DBA 작업 |
+| `mlops` | `` | 전체 (CREATE, INSERT, UPDATE, DELETE) | FastAPI 앱 |
+| `mlops_readonly` | `` | SELECT only | BI 도구, 분석 |
+| `mlops_admin` | `` | CREATE, DROP, ALTER, 사용자 관리 | DBA 작업 |
 
 ---
 
