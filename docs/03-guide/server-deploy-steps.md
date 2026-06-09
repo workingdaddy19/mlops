@@ -32,8 +32,6 @@ psql \
   -d mlops \
   -f /home/mlops_user/mlops/k8s/rds/03-system-settings.sql
 
-# 비밀번호: kyobo11!
-
 # 확인 (테이블 & 시드 데이터)
 psql -h rds-an2-avb-poc-mlops.cza602u202u8.ap-northeast-2.rds.amazonaws.com \
   -U mlops -d mlops \
@@ -45,7 +43,7 @@ psql -h rds-an2-avb-poc-mlops.cza602u202u8.ap-northeast-2.rds.amazonaws.com \
 ## STEP 1 — ECR 로그인
 
 ```bash
-AWS_ACCOUNT="891376975666"
+AWS_ACCOUNT="xxxxx"
 AWS_REGION="ap-northeast-2"
 ECR_REPO="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/mlops/app"
 
