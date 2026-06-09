@@ -143,7 +143,6 @@ mlfoundry/
 ├── ui/                     # Streamlit UI
 │   ├── streamlit_app.py    # 메인 앱
 │   └── pages/              # 페이지 모듈
-├── migrations/             # Alembic 마이그레이션
 ├── docker-compose.yml      # JupyterLab + MLflow
 ├── requirements.txt        # Python 의존성
 ├── .env                    # 환경 변수 (git 미포함!)

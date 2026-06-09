@@ -98,17 +98,12 @@ __pycache__/        ← 런타임 캐시
 *.pyc / *.pyo
 .env                ← 로컬 전용 환경변수 (k8s Secret으로 관리)
 docs/               ← 개발 문서
-libs/
-demo/
-docker/
 docker-compose*.yml
 .git/
 .claude/
 .bkit/
 .streamlit/
 *.log
-alembic.ini
-dbcreate.md
 ```
 
 ---
@@ -123,7 +118,7 @@ PowerShell에서 실행:
 cd "D:\ADT\workspace\mlfoundry_260429"
 
 # 배포 패키지 생성 (제외 목록 적용)
-$exclude = @('.venv','__pycache__','.git','.claude','.bkit','.streamlit','docs','libs','demo','docker','*.log','*.pyc','*.pyo','.env','alembic.ini','dbcreate.md')
+$exclude = @('.venv','__pycache__','.git','.claude','.bkit','.streamlit','docs','*.log','*.pyc','*.pyo','.env')
 $date = Get-Date -Format "yyyyMMdd_HHmm"
 $zipName = "mlfoundry_$date.zip"
 

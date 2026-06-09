@@ -177,5 +177,4 @@ psql -h rds-an2-avb-poc-mlops.cza602u202u8.ap-northeast-2.rds.amazonaws.com \
 
 ## 📚 참고 문서
 
-- Plan: `docs/01-plan/features/rds-postgres-initialization.plan.md`
-- MySQL 스키마 (레거시): `docker/mysql/init/01-schema.sql`
+- 배포 가이드: `docs/03-guide/deployment-guide.md`
