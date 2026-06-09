@@ -8,7 +8,7 @@
 set -euo pipefail
 
 # ─── 변수 설정 ───────────────────────────────────────────────
-AWS_ACCOUNT="891376975666"
+AWS_ACCOUNT="xxxxx"
 AWS_REGION="ap-northeast-2"
 ECR_REPO="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/mlops/app"
 IMAGE_TAG="latest"
