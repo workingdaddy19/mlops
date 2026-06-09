@@ -8,11 +8,11 @@
 ### RDS 연결 정보
 
 ```
-Host:     rds-an2-avb-poc-mlops.cza602u202u8.ap-northeast-2.rds.amazonaws.com
+Host:     xxxxxx
 Port:     5432
 Database: mlops
 User:     mlops (현재 사용자)
-Password: kyobo11!
+
 ```
 
 ---
