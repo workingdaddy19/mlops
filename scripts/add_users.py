@@ -4,18 +4,11 @@ Portal 사용자 동적 추가 스크립트 — 배포 없이 DB에 사용자 �
 
 사용법:
   python scripts/add_users.py <username> <password>
-  python scripts/add_users.py <username>              # 비번 = 아이디와 동일
-
-예시:
-  python scripts/add_users.py 099xxxx xxxx
-  python scripts/add_users.py 099xxxx
-  python scripts/add_users.py alice mysecret user     # role 지정 (기본: user)
-  python scripts/add_users.py bob admin admin         # admin 권한
-
+  
 kubectl exec 실행 예:
   kubectl exec -n mlops -it $(kubectl get pod -n mlops -l app=mlops \
     -o jsonpath='{.items[0].metadata.name}') \
-    -- python scripts/add_users.py 099xxxx xxxx
+    -- python scripts/add_users.py xxxx xxxx
 """
 import sys
 import os
