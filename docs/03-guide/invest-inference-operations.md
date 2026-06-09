@@ -330,7 +330,7 @@ python3 - << 'EOF'
 import mlflow, os
 mlflow.set_tracking_uri("http://mlflow.mlflow.svc.cluster.local:80")
 os.environ["MLFLOW_TRACKING_USERNAME"] = "admin"
-os.environ["MLFLOW_TRACKING_PASSWORD"] = "Clkyobo11111!"
+os.environ["MLFLOW_TRACKING_PASSWORD"] = "xxxx"
 client = mlflow.tracking.MlflowClient()
 for name in ["invest-crel-classification", "invest-crel-regression"]:
     versions = client.search_model_versions(f"name='{name}'")
@@ -352,7 +352,7 @@ python3 - << 'EOF'
 import mlflow, os
 mlflow.set_tracking_uri("http://mlflow.mlflow.svc.cluster.local:80")
 os.environ["MLFLOW_TRACKING_USERNAME"] = "admin"
-os.environ["MLFLOW_TRACKING_PASSWORD"] = "Clkyobo11111!"
+os.environ["MLFLOW_TRACKING_PASSWORD"] = "xxxx"
 client = mlflow.tracking.MlflowClient()
 # 버전 번호 확인 후 적용
 client.set_registered_model_alias("invest-crel-classification", "champion", "3")
